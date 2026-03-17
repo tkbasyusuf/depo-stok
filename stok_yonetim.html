@@ -163,7 +163,7 @@
                     </div>
                 </div>
                 <div class="fr">
-                    <div class="fg"><label>Miktar</label><input class="fi" type="number" id="qty" placeholder="0" inputmode="numeric"></div>
+                    <div class="fg"><label>Miktar</label><input class="fi" type="number" id="qty" placeholder="0" step="any" inputmode="decimal"></div>
                     <div class="fg"><label>Birim</label><input class="fi" id="unt" readonly placeholder="-"></div>
                 </div>
                 <div class="fg"><label>Açıklama</label><input class="fi" id="nt" placeholder="Opsiyonel..."></div>
@@ -497,7 +497,7 @@ function downloadTemplate(){
 function addR(){
     var d = document.createElement('div');
     d.className = 'br';
-    d.innerHTML = '<div class="fg" style="margin:0"><input class="fi bki" list="dl" placeholder="Kod / İsim"></div><div class="fg" style="margin:0"><input class="fi bkq" type="number" inputmode="numeric" placeholder="Miktar"></div><button class="rx" onclick="this.parentElement.remove()">✕</button>';
+    d.innerHTML = '<div class="fg" style="margin:0"><input class="fi bki" list="dl" placeholder="Kod / İsim"></div><div class="fg" style="margin:0"><input class="fi bkq" type="number" step="any" inputmode="decimal" placeholder="Miktar"></div><button class="rx" onclick="this.parentElement.remove()">✕</button>';
     document.getElementById('bkR').appendChild(d);
 }
 function uDL(){
