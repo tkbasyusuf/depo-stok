@@ -91,6 +91,9 @@
         .qrow .ql{color:var(--txt2);font-weight:500}.qrow .qv{font-weight:600;text-align:right;max-width:60%}
         .qstok{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;text-align:center;padding:20px 0}
         .qstok.ok{color:var(--grn)}.qstok.low{color:var(--red)}
+        .qfoto{text-align:center;margin-bottom:16px}
+        .qfoto img{max-width:100%;max-height:250px;border-radius:10px;border:1px solid var(--brd);object-fit:contain;background:#fafaf8}
+        .qfoto .no-foto{padding:30px;color:var(--mute);font-size:13px}
 
         /* EXCEL UPLOAD */
         .upload-zone{border:2px dashed var(--brd);border-radius:var(--r);padding:24px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px;position:relative}
@@ -247,6 +250,7 @@
                     <div class="dd" id="qdd"></div>
                 </div>
                 <div id="qResult" style="display:none">
+                    <div class="qfoto" id="qFoto"></div>
                     <div id="qStokBox" class="qstok ok">—</div>
                     <div id="qDetail"></div>
                 </div>
@@ -580,6 +584,16 @@ function qPick(sku){
     document.getElementById('qdd').classList.remove('show');
     document.getElementById('qEmpty').style.display='none';
     document.getElementById('qResult').style.display='block';
+
+    // Fotoğraf
+    var fotoBox=document.getElementById('qFoto');
+    if(item.foto && item.foto.length>5){
+        var imgUrl=driveToImg(item.foto);
+        fotoBox.innerHTML='<img src="'+imgUrl+'" alt="'+item.ad+'" onerror="this.parentElement.innerHTML=\'<div class=no-foto>📷 Fotoğraf yüklenemedi</div>\'">';
+    } else {
+        fotoBox.innerHTML='<div class="no-foto">📷 Fotoğraf eklenmemiş</div>';
+    }
+
     var stokBox=document.getElementById('qStokBox');
     stokBox.textContent=item.stok+' '+item.birim;
     stokBox.className='qstok '+(item.stok>item.minStok?'ok':'low');
@@ -593,6 +607,22 @@ function qPick(sku){
     document.getElementById('qDetail').innerHTML=rows.map(function(r){
         return '<div class="qrow"><span class="ql">'+r[0]+'</span><span class="qv">'+r[1]+'</span></div>';
     }).join('');
+}
+
+// Google Drive linkini gösterilebilir URL'ye çevir
+function driveToImg(url){
+    // https://drive.google.com/file/d/XXXX/view?usp=sharing → thumbnail
+    var match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if(match){
+        return 'https://drive.google.com/thumbnail?id='+match[1]+'&sz=w500';
+    }
+    // https://drive.google.com/open?id=XXXX
+    var match2 = url.match(/id=([a-zA-Z0-9_-]+)/);
+    if(match2){
+        return 'https://drive.google.com/thumbnail?id='+match2[1]+'&sz=w500';
+    }
+    // Direkt URL ise olduğu gibi döndür
+    return url;
 }
 
 // ═══ HELPERS ═══
