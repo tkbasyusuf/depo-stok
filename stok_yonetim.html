@@ -599,7 +599,7 @@ function qPick(sku){
     stokBox.className='qstok '+(item.stok>item.minStok?'ok':'low');
     var rows=[
         ['SKU Kodu',item.sku],['Kalem Açıklaması',item.ad],['Malzeme Tipi',item.malzeme],
-        ['Ölçü Birimi',item.birim],['Birim Ağırlık',item.agirlik?item.agirlik+' gr':'-'],
+        ['Ölçü Birimi',item.birim],['Not',item.agirlik||'-'],
         ['Raf / Lokasyon',item.raf||'-'],['Tedarikçi 1',item.ted1||'-'],['Tedarikçi 2',item.ted2||'-'],
         ['Depo Kodu 1',item.depo1||'-'],['Depo Kodu 2',item.depo2||'-'],
         ['Mevcut Stok',item.stok+' '+item.birim],['Minimum Stok',item.minStok+' '+item.birim]
