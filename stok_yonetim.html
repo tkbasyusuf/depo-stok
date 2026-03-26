@@ -469,19 +469,45 @@ function submitExcel(){
             aciklama: row.aciklama || ''
         };
     });
-    ap('addBulkMovement', {movements:items}).then(function(r){
-        if(r && r.success){
-            tw(items.length + ' kalem ' + (bt==='Giris'?'giriş':'çıkış') + ' kaydedildi ✓');
+
+    // 10'arlı parçalara böl
+    var chunks = [];
+    for(var i=0; i<items.length; i+=10){
+        chunks.push(items.slice(i, i+10));
+    }
+
+    sl(1);
+    var done=0, fail=0, total=items.length;
+    tw('Gönderiliyor: 0/'+total);
+
+    function sendChunk(idx){
+        if(idx >= chunks.length){
+            sl(0);
+            if(fail===0){
+                tw(total+' kalem '+(bt==='Giris'?'giriş':'çıkış')+' kaydedildi ✓');
+            } else {
+                tw(done+' başarılı, '+fail+' hatalı',1);
+            }
             excelData = [];
             document.getElementById('previewBox').style.display = 'none';
             document.getElementById('previewBody').innerHTML = '';
-            // Reset file input
             var uz = document.getElementById('upZone');
             var inp = uz.querySelector('input[type=file]');
             inp.value = '';
             ld();
-        } else { tw(r?r.message:'Hata!',1); }
-    });
+            return;
+        }
+        ap('addBulkMovement', {movements:chunks[idx]}).then(function(r){
+            if(r && r.success){
+                done += chunks[idx].length;
+            } else {
+                fail += chunks[idx].length;
+            }
+            tw('Gönderiliyor: '+done+'/'+total);
+            sendChunk(idx+1);
+        });
+    }
+    sendChunk(0);
 }
 
 function downloadTemplate(){
@@ -522,12 +548,33 @@ function subB(){
         }
     }
     if(!items.length){ tw('Satır doldurun!',1); return; }
-    ap('addBulkMovement', {movements:items}).then(function(r){
-        if(r && r.success){
-            tw(items.length+' kalem kaydedildi ✓');
+
+    var chunks = [];
+    for(var i=0; i<items.length; i+=10){
+        chunks.push(items.slice(i, i+10));
+    }
+
+    sl(1);
+    var done=0, fail=0, total=items.length;
+
+    function sendChunk(idx){
+        if(idx >= chunks.length){
+            sl(0);
+            if(fail===0){
+                tw(total+' kalem kaydedildi ✓');
+            } else {
+                tw(done+' başarılı, '+fail+' hatalı',1);
+            }
             document.getElementById('bkR').innerHTML=''; addR(); addR(); addR(); ld();
-        } else { tw(r?r.message:'Hata!',1); }
-    });
+            return;
+        }
+        ap('addBulkMovement', {movements:chunks[idx]}).then(function(r){
+            if(r && r.success) done += chunks[idx].length;
+            else fail += chunks[idx].length;
+            sendChunk(idx+1);
+        });
+    }
+    sendChunk(0);
 }
 
 // ═══ HISTORY ═══
