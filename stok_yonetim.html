@@ -230,6 +230,9 @@
                 <button class="ch" onclick="sHF('Cikis',this)">📤 Çıkış</button>
             </div>
             <div class="card" id="hBox"><div class="ey"><div class="ei">🕐</div>Henüz hareket yok.</div></div>
+            <div style="text-align:center;margin-top:12px">
+                <button class="btn-o" style="display:inline-block;width:auto;padding:10px 20px;font-size:13px;border-radius:10px;cursor:pointer;border:1px solid var(--brd);background:var(--card);font-family:'DM Sans',sans-serif;font-weight:600;color:var(--txt)" onclick="exportHareketExcel()">📊 Hareketleri Excel İndir</button>
+            </div>
         </div>
 
         <!-- TAB 4: UYARILAR -->
@@ -240,6 +243,9 @@
                 <div class="st"><div class="sv" style="color:var(--org)" id="vW">0</div><div class="sl">Uyarı</div></div>
             </div>
             <div id="aBox"><div class="ey"><div class="ei">✅</div>Tüm stoklar yeterli.</div></div>
+            <div style="text-align:center;margin-top:16px">
+                <button class="btn-o" style="display:inline-block;width:auto;padding:10px 20px;font-size:13px;border-radius:10px;cursor:pointer;border:1px solid var(--brd);background:var(--card);font-family:'DM Sans',sans-serif;font-weight:600;color:var(--txt)" onclick="exportExcel()">📊 Stok Listesini Excel İndir</button>
+            </div>
         </div>
 
         <!-- TAB 5: SORGULAMA -->
@@ -728,6 +734,42 @@ function driveToImg(url){
     var match2 = url.match(/id=([a-zA-Z0-9_-]+)/);
     if(match2) return 'https://drive.google.com/thumbnail?id='+match2[1]+'&sz=w500';
     return url;
+}
+
+// ═══ EXCEL EXPORT ═══
+function exportExcel(){
+    if(!D.length){ tw('Stok verisi yok!',1); return; }
+    var rows = [['SKU Kodu','Kalem Açıklaması','Tedarikçi-1','Tedarikçi-2','Depo Kodu-1','Depo Kodu-2','Malzeme Tipi','Ölçü Birimi','Not','Raf/Lokasyon','Mevcut Stok','Minimum Stok','Foto URL']];
+    for(var i=0; i<D.length; i++){
+        var s=D[i];
+        rows.push([s.sku, s.ad, s.ted1, s.ted2, s.depo1, s.depo2, s.malzeme, s.birim, s.agirlik, s.raf, s.stok, s.minStok, s.foto]);
+    }
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:18},{wch:45},{wch:14},{wch:14},{wch:14},{wch:14},{wch:16},{wch:10},{wch:10},{wch:14},{wch:12},{wch:12},{wch:40}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Stok');
+    var tarih = new Date();
+    var dosyaAdi = 'Stok_' + ('0'+tarih.getDate()).slice(-2) + ('0'+(tarih.getMonth()+1)).slice(-2) + tarih.getFullYear() + '.xlsx';
+    XLSX.writeFile(wb, dosyaAdi);
+    tw('Excel indirildi ✓');
+}
+
+// ═══ HAREKET EXCEL EXPORT ═══
+function exportHareketExcel(){
+    if(!M.length){ tw('Hareket verisi yok!',1); return; }
+    var rows = [['Tarih','SKU Kodu','Kalem Açıklaması','İşlem Tipi','Miktar','Önceki Stok','Yeni Stok','Operatör','Açıklama']];
+    for(var i=0; i<M.length; i++){
+        var h=M[i];
+        rows.push([h.tarih, h.sku, h.ad, h.tip==='Giris'?'Giriş':'Çıkış', h.miktar, h.onceki, h.yeni, h.operator, h.aciklama]);
+    }
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:18},{wch:18},{wch:40},{wch:10},{wch:10},{wch:12},{wch:12},{wch:14},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Hareketler');
+    var tarih = new Date();
+    var dosyaAdi = 'Hareketler_' + ('0'+tarih.getDate()).slice(-2) + ('0'+(tarih.getMonth()+1)).slice(-2) + tarih.getFullYear() + '.xlsx';
+    XLSX.writeFile(wb, dosyaAdi);
+    tw('Hareket Excel indirildi ✓');
 }
 
 // ═══ HELPERS ═══
