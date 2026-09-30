@@ -6,6 +6,7 @@
     <title>Depo Stok</title>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         :root{--bg:#f0ece4;--card:#fff;--brd:#e8e4dc;--txt:#2c2c2c;--txt2:#888;--mute:#aaa;--dark:#2c2c2c;--grn:#2d8a4e;--red:#c0392b;--org:#d4850a;--r:14px}
@@ -271,13 +272,16 @@
 </div>
 
 <script>
-// ═══ CONFIG ═══
-var API = 'https://script.google.com/macros/s/AKfycbwXImgk8RGLcYp8878jcgHjMsv8GrmzDmHODjsKogc-6aKuX2lkfab_HYoMuG79Dl5-/exec';
+// ═══ SUPABASE CONFIG ═══
+var SUPABASE_URL = 'https://ddvzkyfprrtqmbsntuch.supabase.co';
+var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkdnpreWZwcnJ0cW1ic250dWNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NjQ1NTksImV4cCI6MjEwNjM0MDU1OX0.teFsl6LqOBtPE3e-OMvT5Bu3VQ8O_TBrMwHWr1xImDQ';
+
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ═══ STATE ═══
 var O = localStorage.getItem('so') || '';
 var D = [], M = [], sel = null, mt = 'Giris', bt = 'Giris', hf = 'all';
-var excelData = []; // parsed excel rows
+var excelData = [];
 
 // ═══ INIT ═══
 (function(){
@@ -295,7 +299,6 @@ var excelData = []; // parsed excel rows
         }
     });
 
-    // Drag & drop
     var uz = document.getElementById('upZone');
     if(uz){
         uz.addEventListener('dragover', function(e){ e.preventDefault(); uz.classList.add('drag'); });
@@ -317,26 +320,105 @@ function doLogin(){
 }
 function doLogout(){ localStorage.removeItem('so'); location.reload(); }
 
-// ═══ API ═══
-function ap(action, data){
+// ═══ DATA LOADING (SUPABASE) ═══
+async function ld(){
     sl(1);
-    data = data || {};
-    var u = API + '?action=' + action + '&data=' + encodeURIComponent(JSON.stringify(data)) + '&operator=' + encodeURIComponent(O);
-    return fetch(u, {mode:'cors'})
-        .then(function(r){ return r.json(); })
-        .then(function(j){ sl(0); return j; })
-        .catch(function(e){ sl(0); tw('Bağlantı hatası!',1); return null; });
+    try {
+        var stokRes = await sb.from('stok').select('*').order('sku');
+        var hrkRes = await sb.from('hareketler').select('*').order('tarih', {ascending: true});
+
+        if(stokRes.error) throw stokRes.error;
+        if(hrkRes.error) throw hrkRes.error;
+
+        // Map Supabase columns to frontend field names
+        D = (stokRes.data || []).map(function(r){
+            return {
+                sku: r.sku,
+                ad: r.aciklama || '',
+                ted1: r.tedarikci_1 || '-',
+                ted2: r.tedarikci_2 || '-',
+                depo1: r.depo_kodu_1 || '-',
+                depo2: r.depo_kodu_2 || '-',
+                malzeme: r.malzeme_tipi || '-',
+                birim: r.olcu_birimi || 'AD',
+                agirlik: r.not_alani || '-',
+                raf: r.raf_lokasyon || '-',
+                stok: parseFloat(r.mevcut_stok) || 0,
+                minStok: parseFloat(r.minimum_stok) || 0,
+                foto: r.foto_url || ''
+            };
+        });
+
+        M = (hrkRes.data || []).map(function(r){
+            return {
+                tarih: formatDate(r.tarih),
+                sku: r.sku || '',
+                ad: r.aciklama || '',
+                tip: r.islem_tipi || '',
+                miktar: parseFloat(r.miktar) || 0,
+                onceki: parseFloat(r.onceki_stok) || 0,
+                yeni: parseFloat(r.yeni_stok) || 0,
+                operator: r.operator || '',
+                aciklama: r.hareket_aciklama || ''
+            };
+        });
+
+        uA(); rH(); uDL();
+        sl(0);
+        tw('Veriler yüklendi ✓');
+    } catch(err) {
+        sl(0);
+        tw('Veri yükleme hatası: ' + (err.message || err), 1);
+    }
 }
 
-function ld(){
-    ap('getAll').then(function(r){
-        if(r && r.success){
-            D = r.stock || [];
-            M = r.movements || [];
-            uA(); rH(); uDL();
-            tw('Veriler yüklendi ✓');
-        }
+function formatDate(d){
+    if(!d) return '';
+    var date = new Date(d);
+    if(isNaN(date.getTime())) return String(d);
+    var day = ('0'+date.getDate()).slice(-2);
+    var month = ('0'+(date.getMonth()+1)).slice(-2);
+    var year = date.getFullYear();
+    var hour = ('0'+date.getHours()).slice(-2);
+    var min = ('0'+date.getMinutes()).slice(-2);
+    return day+'.'+month+'.'+year+' '+hour+':'+min;
+}
+
+// ═══ SINGLE MOVEMENT (SUPABASE) ═══
+async function addMovement(data){
+    // 1. Read current stock
+    var res = await sb.from('stok').select('mevcut_stok').eq('sku', data.sku).single();
+    if(res.error) return {success:false, message:'SKU bulunamadı: '+data.sku};
+
+    var currentStock = parseFloat(res.data.mevcut_stok) || 0;
+    var miktar = parseFloat(data.miktar);
+    var newStock;
+
+    if(data.tip === 'Giris'){
+        newStock = currentStock + miktar;
+    } else {
+        newStock = currentStock - miktar;
+        if(newStock < 0) return {success:false, message:'Yetersiz stok! Mevcut: '+currentStock};
+    }
+
+    // 2. Update stock
+    var upd = await sb.from('stok').update({mevcut_stok: newStock}).eq('sku', data.sku);
+    if(upd.error) return {success:false, message:'Stok güncellenemedi: '+upd.error.message};
+
+    // 3. Insert movement record
+    var ins = await sb.from('hareketler').insert({
+        sku: data.sku,
+        aciklama: data.ad || '',
+        islem_tipi: data.tip,
+        miktar: miktar,
+        onceki_stok: currentStock,
+        yeni_stok: newStock,
+        operator: O,
+        hareket_aciklama: data.aciklama || ''
     });
+    if(ins.error) return {success:false, message:'Hareket kaydedilemedi: '+ins.error.message};
+
+    return {success:true, message:'Kaydedildi', newStock:newStock};
 }
 
 // ═══ TABS ═══
@@ -367,7 +449,7 @@ function doSrch(){
     var q = document.getElementById('srch').value.toLowerCase().trim();
     var dd = document.getElementById('ddx');
     var l = q ? D.filter(function(s){ return s.sku.toLowerCase().includes(q)||s.ad.toLowerCase().includes(q); }).slice(0,12) : D.slice(0,15);
-    dd.innerHTML = l.length ? l.map(function(s){ return '<div class="di" onclick="pk(\''+s.sku+'\')"><div class="dc">'+s.sku+'</div><div class="dn">'+s.ad+'</div><div class="ds">Stok: '+s.stok+' '+s.birim+' | Min: '+s.minStok+'</div></div>'; }).join('') : '<div class="di" style="color:var(--mute)">Bulunamadı</div>';
+    dd.innerHTML = l.length ? l.map(function(s){ return '<div class="di" onclick="pk(\''+s.sku.replace(/'/g,"\\'")+'\')"><div class="dc">'+s.sku+'</div><div class="dn">'+s.ad+'</div><div class="ds">Stok: '+s.stok+' '+s.birim+' | Min: '+s.minStok+'</div></div>'; }).join('') : '<div class="di" style="color:var(--mute)">Bulunamadı</div>';
     dd.classList.add('show');
 }
 
@@ -384,18 +466,23 @@ function pk(k){
 }
 
 // ═══ SUBMIT SINGLE ═══
-function sub1(){
+async function sub1(){
     if(!sel){ tw('Hammadde seçin!',1); return; }
     var q = parseFloat(document.getElementById('qty').value);
     if(!q || q<=0){ tw('Miktar girin!',1); return; }
     var n = document.getElementById('nt').value.trim();
-    ap('addMovement', {sku:sel.sku, ad:sel.ad, tip:mt, miktar:q, birim:sel.birim, aciklama:n}).then(function(r){
-        if(r && r.success){
-            tw((mt==='Giris'?'Giriş':'Çıkış')+' kaydedildi ✓');
-            document.getElementById('qty').value=''; document.getElementById('nt').value=''; document.getElementById('srch').value='';
-            document.getElementById('selBox').style.display='none'; sel=null; ld();
-        } else { tw(r?r.message:'Hata!',1); }
-    });
+
+    sl(1);
+    var r = await addMovement({sku:sel.sku, ad:sel.ad, tip:mt, miktar:q, aciklama:n});
+    sl(0);
+
+    if(r.success){
+        tw((mt==='Giris'?'Giriş':'Çıkış')+' kaydedildi ✓');
+        document.getElementById('qty').value=''; document.getElementById('nt').value=''; document.getElementById('srch').value='';
+        document.getElementById('selBox').style.display='none'; sel=null; ld();
+    } else {
+        tw(r.message || 'Hata!', 1);
+    }
 }
 
 // ═══ EXCEL / CSV UPLOAD ═══
@@ -456,8 +543,9 @@ function showPreview(){
     tw('Dosya okundu ✓');
 }
 
-function submitExcel(){
+async function submitExcel(){
     if(!excelData.length){ tw('Önce dosya yükleyin!',1); return; }
+
     var items = excelData.map(function(row){
         var found = D.find(function(s){ return s.sku === row.sku; });
         return {
@@ -465,49 +553,35 @@ function submitExcel(){
             ad: found ? found.ad : row.sku,
             tip: bt,
             miktar: row.miktar,
-            birim: found ? found.birim : '',
             aciklama: row.aciklama || ''
         };
     });
-
-    // 10'arlı parçalara böl
-    var chunks = [];
-    for(var i=0; i<items.length; i+=10){
-        chunks.push(items.slice(i, i+10));
-    }
 
     sl(1);
     var done=0, fail=0, total=items.length;
     tw('Gönderiliyor: 0/'+total);
 
-    function sendChunk(idx){
-        if(idx >= chunks.length){
-            sl(0);
-            if(fail===0){
-                tw(total+' kalem '+(bt==='Giris'?'giriş':'çıkış')+' kaydedildi ✓');
-            } else {
-                tw(done+' başarılı, '+fail+' hatalı',1);
-            }
-            excelData = [];
-            document.getElementById('previewBox').style.display = 'none';
-            document.getElementById('previewBody').innerHTML = '';
-            var uz = document.getElementById('upZone');
-            var inp = uz.querySelector('input[type=file]');
-            inp.value = '';
-            ld();
-            return;
+    for(var i=0; i<items.length; i++){
+        var r = await addMovement(items[i]);
+        if(r.success) done++;
+        else fail++;
+        if((i+1) % 5 === 0 || i === items.length-1){
+            tw('Gönderiliyor: '+(i+1)+'/'+total);
         }
-        ap('addBulkMovement', {movements:chunks[idx]}).then(function(r){
-            if(r && r.success){
-                done += chunks[idx].length;
-            } else {
-                fail += chunks[idx].length;
-            }
-            tw('Gönderiliyor: '+done+'/'+total);
-            sendChunk(idx+1);
-        });
     }
-    sendChunk(0);
+
+    sl(0);
+    if(fail===0){
+        tw(total+' kalem '+(bt==='Giris'?'giriş':'çıkış')+' kaydedildi ✓');
+    } else {
+        tw(done+' başarılı, '+fail+' hatalı',1);
+    }
+    excelData = [];
+    document.getElementById('previewBox').style.display = 'none';
+    document.getElementById('previewBody').innerHTML = '';
+    var inp = document.querySelector('#upZone input[type=file]');
+    if(inp) inp.value = '';
+    ld();
 }
 
 function downloadTemplate(){
@@ -535,7 +609,8 @@ function uDL(){
     if(!dl){ dl=document.createElement('datalist'); dl.id='dl'; document.body.appendChild(dl); }
     dl.innerHTML = D.map(function(s){ return '<option value="'+s.sku+' — '+s.ad+'">'; }).join('');
 }
-function subB(){
+
+async function subB(){
     var rows = document.querySelectorAll('.br');
     var items = [];
     for(var i=0;i<rows.length;i++){
@@ -544,37 +619,27 @@ function subB(){
         if(txt && q>0){
             var kod = txt.split('—')[0].trim().split(' ')[0].trim();
             var f = D.find(function(s){ return s.sku===kod; }) || D.find(function(s){ return txt.toLowerCase().includes(s.ad.toLowerCase()); });
-            items.push({sku:f?f.sku:kod, ad:f?f.ad:txt, tip:bt, miktar:q, birim:f?f.birim:'', aciklama:''});
+            items.push({sku:f?f.sku:kod, ad:f?f.ad:txt, tip:bt, miktar:q, aciklama:''});
         }
     }
     if(!items.length){ tw('Satır doldurun!',1); return; }
 
-    var chunks = [];
-    for(var i=0; i<items.length; i+=10){
-        chunks.push(items.slice(i, i+10));
-    }
-
     sl(1);
     var done=0, fail=0, total=items.length;
 
-    function sendChunk(idx){
-        if(idx >= chunks.length){
-            sl(0);
-            if(fail===0){
-                tw(total+' kalem kaydedildi ✓');
-            } else {
-                tw(done+' başarılı, '+fail+' hatalı',1);
-            }
-            document.getElementById('bkR').innerHTML=''; addR(); addR(); addR(); ld();
-            return;
-        }
-        ap('addBulkMovement', {movements:chunks[idx]}).then(function(r){
-            if(r && r.success) done += chunks[idx].length;
-            else fail += chunks[idx].length;
-            sendChunk(idx+1);
-        });
+    for(var i=0; i<items.length; i++){
+        var r = await addMovement(items[i]);
+        if(r.success) done++;
+        else fail++;
     }
-    sendChunk(0);
+
+    sl(0);
+    if(fail===0){
+        tw(total+' kalem kaydedildi ✓');
+    } else {
+        tw(done+' başarılı, '+fail+' hatalı',1);
+    }
+    document.getElementById('bkR').innerHTML=''; addR(); addR(); addR(); ld();
 }
 
 // ═══ HISTORY ═══
@@ -585,7 +650,7 @@ function rH(){
     if(q) d = d.filter(function(m){ return m.sku.toLowerCase().includes(q)||m.ad.toLowerCase().includes(q)||m.operator.toLowerCase().includes(q); });
     if(hf!=='all') d = d.filter(function(m){ return m.tip===hf; });
     if(!d.length){ bx.innerHTML='<div class="ey"><div class="ei">🕐</div>Hareket bulunamadı.</div>'; return; }
-    bx.innerHTML = d.slice(0,50).map(function(m){
+    bx.innerHTML = d.slice(0,100).map(function(m){
         var isIn = m.tip==='Giris';
         return '<div class="hi"><div class="hic '+(isIn?'i':'o')+'">'+(isIn?'📥':'📤')+'</div><div class="hd"><div class="hn">'+m.ad+'</div><div class="hm">'+m.sku+' · '+m.tarih+' · '+(m.operator||'')+(m.aciklama?' · '+m.aciklama:'')+'</div></div><div class="hq '+(isIn?'i':'o')+'">'+(isIn?'+':'-')+m.miktar+'</div></div>';
     }).join('');
@@ -621,7 +686,7 @@ function doQSrch(){
     var q=document.getElementById('qSrch').value.toLowerCase().trim();
     var dd=document.getElementById('qdd');
     var l=q?D.filter(function(s){return s.sku.toLowerCase().includes(q)||s.ad.toLowerCase().includes(q);}).slice(0,12):D.slice(0,15);
-    dd.innerHTML=l.length?l.map(function(s){return '<div class="di" onclick="qPick(\''+s.sku+'\')"><div class="dc">'+s.sku+'</div><div class="dn">'+s.ad+'</div></div>';}).join(''):'<div class="di" style="color:var(--mute)">Bulunamadı</div>';
+    dd.innerHTML=l.length?l.map(function(s){return '<div class="di" onclick="qPick(\''+s.sku.replace(/'/g,"\\'")+'\')"><div class="dc">'+s.sku+'</div><div class="dn">'+s.ad+'</div></div>';}).join(''):'<div class="di" style="color:var(--mute)">Bulunamadı</div>';
     dd.classList.add('show');
 }
 function qPick(sku){
@@ -658,17 +723,10 @@ function qPick(sku){
 
 // Google Drive linkini gösterilebilir URL'ye çevir
 function driveToImg(url){
-    // https://drive.google.com/file/d/XXXX/view?usp=sharing → thumbnail
     var match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if(match){
-        return 'https://drive.google.com/thumbnail?id='+match[1]+'&sz=w500';
-    }
-    // https://drive.google.com/open?id=XXXX
+    if(match) return 'https://drive.google.com/thumbnail?id='+match[1]+'&sz=w500';
     var match2 = url.match(/id=([a-zA-Z0-9_-]+)/);
-    if(match2){
-        return 'https://drive.google.com/thumbnail?id='+match2[1]+'&sz=w500';
-    }
-    // Direkt URL ise olduğu gibi döndür
+    if(match2) return 'https://drive.google.com/thumbnail?id='+match2[1]+'&sz=w500';
     return url;
 }
 
