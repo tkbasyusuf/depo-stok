@@ -326,18 +326,31 @@ function doLogin(){
 }
 function doLogout(){ localStorage.removeItem('so'); location.reload(); }
 
+// ═══ PAGINATED FETCH (Supabase 1000-row limit bypass) ═══
+async function fetchAll(table, orderCol, ascending){
+    var allData = [];
+    var pageSize = 1000;
+    var from = 0;
+    while(true){
+        var res = await sb.from(table).select('*').order(orderCol, {ascending: ascending !== false}).range(from, from + pageSize - 1);
+        if(res.error) throw res.error;
+        if(!res.data || res.data.length === 0) break;
+        allData = allData.concat(res.data);
+        if(res.data.length < pageSize) break;
+        from += pageSize;
+    }
+    return allData;
+}
+
 // ═══ DATA LOADING (SUPABASE) ═══
 async function ld(){
     sl(1);
     try {
-        var stokRes = await sb.from('stok').select('*').order('sku');
-        var hrkRes = await sb.from('hareketler').select('*').order('tarih', {ascending: true});
-
-        if(stokRes.error) throw stokRes.error;
-        if(hrkRes.error) throw hrkRes.error;
+        var stokData = await fetchAll('stok', 'sku', true);
+        var hrkData = await fetchAll('hareketler', 'tarih', true);
 
         // Map Supabase columns to frontend field names
-        D = (stokRes.data || []).map(function(r){
+        D = stokData.map(function(r){
             return {
                 sku: r.sku,
                 ad: r.aciklama || '',
@@ -355,7 +368,7 @@ async function ld(){
             };
         });
 
-        M = (hrkRes.data || []).map(function(r){
+        M = hrkData.map(function(r){
             return {
                 tarih: formatDate(r.tarih),
                 sku: r.sku || '',
