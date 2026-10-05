@@ -210,8 +210,8 @@
 
             <!-- Toplu Güncelleme -->
             <div class="card" style="margin-top:12px">
-                <div class="cl">✏️ Toplu Güncelleme (Stok + Not)</div>
-                <p style="font-size:12px;color:var(--txt2);margin-bottom:12px">Mevcut stok miktarlarını ve not alanlarını Excel ile toplu güncelleyin. Önce indirin, düzenleyin, tekrar yükleyin.</p>
+                <div class="cl">✏️ Toplu Güncelleme (Stok + Not + Durum)</div>
+                <p style="font-size:12px;color:var(--txt2);margin-bottom:12px">Stok miktarlarını, notları ve aktif/pasif durumunu Excel ile toplu güncelleyin. Önce indirin, düzenleyin, tekrar yükleyin.</p>
                 <div class="fg"><label>Filtre (opsiyonel)</label><input class="fi" id="guFlt" placeholder="Örn: T5 veya boş bırakın (tümü)"></div>
                 <button class="btn btn-o" style="margin-bottom:10px" onclick="exportGuncelleme()">📥 Güncelleme Excel İndir</button>
                 <div class="upload-zone" id="guZone" style="margin-bottom:10px">
@@ -223,7 +223,7 @@
                     <div class="preview-count" id="guCount"></div>
                     <div style="overflow-x:auto">
                         <table class="preview-table">
-                            <thead><tr><th>SKU</th><th>Yeni Stok</th><th>Not</th><th>Değişim</th></tr></thead>
+                            <thead><tr><th>SKU</th><th>Yeni Stok</th><th>Not</th><th>Durum</th><th>Değişim</th></tr></thead>
                             <tbody id="guBody"></tbody>
                         </table>
                     </div>
@@ -394,7 +394,8 @@ async function ld(){
                 raf: r.raf_lokasyon || '-',
                 stok: parseFloat(r.mevcut_stok) || 0,
                 minStok: parseFloat(r.minimum_stok) || 0,
-                foto: r.foto_url || ''
+                foto: r.foto_url || '',
+                durum: r.durum || 'aktif'
             };
         });
 
@@ -498,7 +499,7 @@ function doSrch(){
     var q = document.getElementById('srch').value.toLowerCase().trim();
     var dd = document.getElementById('ddx');
     var l = q ? D.filter(function(s){ return s.sku.toLowerCase().includes(q)||s.ad.toLowerCase().includes(q); }).slice(0,12) : D.slice(0,15);
-    dd.innerHTML = l.length ? l.map(function(s){ return '<div class="di" onclick="pk(\''+s.sku.replace(/'/g,"\\'")+'\')"><div class="dc">'+s.sku+'</div><div class="dn">'+s.ad+'</div><div class="ds">Stok: '+s.stok+' '+s.birim+' | Min: '+s.minStok+'</div></div>'; }).join('') : '<div class="di" style="color:var(--mute)">Bulunamadı</div>';
+    dd.innerHTML = l.length ? l.map(function(s){ var isPasif = s.durum==='pasif'; return '<div class="di" onclick="pk(\''+s.sku.replace(/'/g,"\\'")+'\')"><div class="dc">'+s.sku+(isPasif?' <span style="color:var(--red);font-size:10px">● PASİF</span>':'')+'</div><div class="dn"'+(isPasif?' style="opacity:.5"':'')+'>'+s.ad+'</div><div class="ds">Stok: '+s.stok+' '+s.birim+' | Min: '+s.minStok+'</div></div>'; }).join('') : '<div class="di" style="color:var(--mute)">Bulunamadı</div>';
     dd.classList.add('show');
 }
 
@@ -735,7 +736,7 @@ function doQSrch(){
     var q=document.getElementById('qSrch').value.toLowerCase().trim();
     var dd=document.getElementById('qdd');
     var l=q?D.filter(function(s){return s.sku.toLowerCase().includes(q)||s.ad.toLowerCase().includes(q);}).slice(0,12):D.slice(0,15);
-    dd.innerHTML=l.length?l.map(function(s){return '<div class="di" onclick="qPick(\''+s.sku.replace(/'/g,"\\'")+'\')"><div class="dc">'+s.sku+'</div><div class="dn">'+s.ad+'</div></div>';}).join(''):'<div class="di" style="color:var(--mute)">Bulunamadı</div>';
+    dd.innerHTML=l.length?l.map(function(s){var isPasif=s.durum==='pasif';return '<div class="di" onclick="qPick(\''+s.sku.replace(/'/g,"\\'")+'\')"><div class="dc">'+s.sku+(isPasif?' <span style="color:var(--red);font-size:10px">● PASİF</span>':'')+'</div><div class="dn"'+(isPasif?' style="opacity:.5"':'')+'>'+s.ad+'</div></div>';}).join(''):'<div class="di" style="color:var(--mute)">Bulunamadı</div>';
     dd.classList.add('show');
 }
 function qPick(sku){
@@ -758,8 +759,10 @@ function qPick(sku){
     var stokBox=document.getElementById('qStokBox');
     stokBox.textContent=item.stok+' '+item.birim;
     stokBox.className='qstok '+(item.stok>item.minStok?'ok':'low');
+    var durumLabel = item.durum === 'pasif' ? '🔴 Pasif' : '🟢 Aktif';
+    var durumBtn = '<button onclick="toggleDurum(\''+item.sku+'\')" style="padding:4px 12px;border-radius:8px;border:1px solid var(--brd);background:'+(item.durum==='pasif'?'#ffeaea':'#eaf7ee')+';font-family:DM Sans,sans-serif;font-size:12px;font-weight:600;cursor:pointer;color:'+(item.durum==='pasif'?'var(--red)':'var(--grn)')+'">'+durumLabel+'</button>';
     var rows=[
-        ['SKU Kodu',item.sku],['Kalem Açıklaması',item.ad],['Malzeme Tipi',item.malzeme],
+        ['SKU Kodu',item.sku],['Kalem Açıklaması',item.ad],['Durum',durumBtn],['Malzeme Tipi',item.malzeme],
         ['Ölçü Birimi',item.birim],['Not',item.agirlik||'-'],
         ['Raf / Lokasyon',item.raf||'-'],['Tedarikçi 1',item.ted1||'-'],['Tedarikçi 2',item.ted2||'-'],
         ['Depo Kodu 1',item.depo1||'-'],['Depo Kodu 2',item.depo2||'-'],
@@ -782,14 +785,14 @@ function driveToImg(url){
 // ═══ EXCEL EXPORT ═══
 function exportExcel(){
     if(!D.length){ tw('Stok verisi yok!',1); return; }
-    var rows = [['SKU Kodu','Kalem Açıklaması','Tedarikçi-1','Tedarikçi-2','Depo Kodu-1','Depo Kodu-2','Malzeme Tipi','Ölçü Birimi','Not','Raf/Lokasyon','Mevcut Stok','Minimum Stok','Foto URL']];
+    var rows = [['SKU Kodu','Kalem Açıklaması','Tedarikçi-1','Tedarikçi-2','Depo Kodu-1','Depo Kodu-2','Malzeme Tipi','Ölçü Birimi','Not','Raf/Lokasyon','Mevcut Stok','Minimum Stok','Durum','Foto URL']];
     for(var i=0; i<D.length; i++){
         var s=D[i];
-        rows.push([s.sku, s.ad, s.ted1, s.ted2, s.depo1, s.depo2, s.malzeme, s.birim, s.agirlik, s.raf, s.stok, s.minStok, s.foto]);
+        rows.push([s.sku, s.ad, s.ted1, s.ted2, s.depo1, s.depo2, s.malzeme, s.birim, s.agirlik, s.raf, s.stok, s.minStok, s.durum || 'aktif', s.foto]);
     }
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:18},{wch:45},{wch:14},{wch:14},{wch:14},{wch:14},{wch:16},{wch:10},{wch:10},{wch:14},{wch:12},{wch:12},{wch:40}];
+    ws['!cols'] = [{wch:18},{wch:45},{wch:14},{wch:14},{wch:14},{wch:14},{wch:16},{wch:10},{wch:10},{wch:14},{wch:12},{wch:12},{wch:10},{wch:40}];
     XLSX.utils.book_append_sheet(wb, ws, 'Stok');
     var tarih = new Date();
     var dosyaAdi = 'Stok_' + ('0'+tarih.getDate()).slice(-2) + ('0'+(tarih.getMonth()+1)).slice(-2) + tarih.getFullYear() + '.xlsx';
@@ -826,14 +829,14 @@ function exportGuncelleme(){
         filtered = D.filter(function(s){ return s.sku.toUpperCase().indexOf(flt) > -1 || s.ad.toUpperCase().indexOf(flt) > -1; });
     }
     if(!filtered.length){ tw('Filtreye uyan kalem yok!',1); return; }
-    var rows = [['SKU Kodu','Kalem Açıklaması','Mevcut Stok','Not']];
+    var rows = [['SKU Kodu','Kalem Açıklaması','Mevcut Stok','Not','Durum']];
     for(var i=0; i<filtered.length; i++){
         var s = filtered[i];
-        rows.push([s.sku, s.ad, s.stok, s.agirlik === '-' ? '' : s.agirlik]);
+        rows.push([s.sku, s.ad, s.stok, s.agirlik === '-' ? '' : s.agirlik, s.durum || 'aktif']);
     }
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:20},{wch:45},{wch:14},{wch:30}];
+    ws['!cols'] = [{wch:20},{wch:45},{wch:14},{wch:30},{wch:10}];
     XLSX.utils.book_append_sheet(wb, ws, 'Guncelleme');
     var fn = 'Guncelleme_' + (flt || 'Tumu') + '.xlsx';
     XLSX.writeFile(wb, fn);
@@ -863,7 +866,9 @@ function parseGuCSV(text){
         var sku = (cols[0]||'').trim();
         var stok = parseFloat((cols[2]||'0').replace(',','.')) || 0;
         var not_val = (cols[3]||'').trim();
-        if(sku) guData.push({sku:sku, ad:(cols[1]||'').trim(), stok:stok, not:not_val});
+        var durum_val = (cols[4]||'').trim().toLowerCase();
+        if(durum_val && durum_val !== 'aktif' && durum_val !== 'pasif') durum_val = '';
+        if(sku) guData.push({sku:sku, ad:(cols[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || ''});
     }
     showGuPreview();
 }
@@ -879,7 +884,9 @@ function parseGuXLSX(data){
         var sku = String(row[0]).trim();
         var stok = parseFloat(row[2]) || 0;
         var not_val = String(row[3]||'').trim();
-        if(sku) guData.push({sku:sku, ad:String(row[1]||'').trim(), stok:stok, not:not_val});
+        var durum_val = String(row[4]||'').trim().toLowerCase();
+        if(durum_val && durum_val !== 'aktif' && durum_val !== 'pasif') durum_val = '';
+        if(sku) guData.push({sku:sku, ad:String(row[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || ''});
     }
     showGuPreview();
 }
@@ -897,12 +904,14 @@ function showGuPreview(){
             if(cur.stok !== g.stok) diffs.push('Stok: ' + cur.stok + ' → ' + g.stok);
             var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
             if(curNot !== g.not) diffs.push('Not değişti');
+            if(g.durum && cur.durum !== g.durum) diffs.push('Durum: ' + cur.durum + ' → ' + g.durum);
             diff = diffs.length ? diffs.join(', ') : 'Değişiklik yok';
             if(diffs.length) changed++;
         } else {
             diff = '⚠️ SKU bulunamadı';
         }
-        html += '<tr><td class="pv-sku">' + g.sku + '</td><td>' + g.stok + '</td><td>' + (g.not||'-') + '</td><td style="font-size:11px;color:' + (diff.indexOf('→')>-1||diff.indexOf('değişti')>-1?'var(--org)':'var(--txt2)') + '">' + diff + '</td></tr>';
+        var durumDisplay = g.durum ? (g.durum === 'pasif' ? '🔴 Pasif' : '🟢 Aktif') : '-';
+        html += '<tr><td class="pv-sku">' + g.sku + '</td><td>' + g.stok + '</td><td>' + (g.not||'-') + '</td><td style="font-size:11px">' + durumDisplay + '</td><td style="font-size:11px;color:' + (diff.indexOf('→')>-1||diff.indexOf('değişti')>-1?'var(--org)':'var(--txt2)') + '">' + diff + '</td></tr>';
     }
     document.getElementById('guCount').textContent = guData.length + ' kalem, ' + changed + ' değişiklik';
     document.getElementById('guBody').innerHTML = html;
@@ -924,6 +933,7 @@ async function submitGuncelleme(){
         if(cur.stok !== g.stok) updates.mevcut_stok = g.stok;
         var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
         if(curNot !== g.not) updates.not_alani = g.not || '-';
+        if(g.durum && cur.durum !== g.durum) updates.durum = g.durum;
 
         if(Object.keys(updates).length === 0){ skip++; continue; }
 
@@ -943,6 +953,23 @@ async function submitGuncelleme(){
     var inp = document.querySelector('#guZone input[type=file]');
     if(inp) inp.value = '';
     ld();
+}
+
+// ═══ DURUM TOGGLE ═══
+async function toggleDurum(sku){
+    var item = D.find(function(s){ return s.sku === sku; });
+    if(!item){ tw('Ürün bulunamadı!',1); return; }
+    var yeniDurum = item.durum === 'aktif' ? 'pasif' : 'aktif';
+    sl(1);
+    var res = await sb.from('stok').update({durum: yeniDurum}).eq('sku', sku);
+    sl(0);
+    if(res.error){
+        tw('Durum güncellenemedi: ' + res.error.message, 1);
+        return;
+    }
+    tw(sku + ' → ' + (yeniDurum === 'aktif' ? '🟢 Aktif' : '🔴 Pasif'));
+    await ld();
+    qPick(sku);
 }
 
 // ═══ HELPERS ═══
