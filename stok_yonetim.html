@@ -208,6 +208,29 @@
                 </div>
             </div>
 
+            <!-- Toplu Güncelleme -->
+            <div class="card" style="margin-top:12px">
+                <div class="cl">✏️ Toplu Güncelleme (Stok + Not)</div>
+                <p style="font-size:12px;color:var(--txt2);margin-bottom:12px">Mevcut stok miktarlarını ve not alanlarını Excel ile toplu güncelleyin. Önce indirin, düzenleyin, tekrar yükleyin.</p>
+                <div class="fg"><label>Filtre (opsiyonel)</label><input class="fi" id="guFlt" placeholder="Örn: T5 veya boş bırakın (tümü)"></div>
+                <button class="btn btn-o" style="margin-bottom:10px" onclick="exportGuncelleme()">📥 Güncelleme Excel İndir</button>
+                <div class="upload-zone" id="guZone" style="margin-bottom:10px">
+                    <div class="uz-icon">📄</div>
+                    <div class="uz-text">Düzenlenmiş Excel'i sürükleyin<br>veya tıklayarak seçin</div>
+                    <input type="file" accept=".xlsx,.xls,.csv" onchange="handleGuFile(this.files[0])">
+                </div>
+                <div id="guPreview" style="display:none">
+                    <div class="preview-count" id="guCount"></div>
+                    <div style="overflow-x:auto">
+                        <table class="preview-table">
+                            <thead><tr><th>SKU</th><th>Yeni Stok</th><th>Not</th><th>Değişim</th></tr></thead>
+                            <tbody id="guBody"></tbody>
+                        </table>
+                    </div>
+                    <button class="btn btn-d" onclick="submitGuncelleme()">✅ Toplu Güncelle</button>
+                </div>
+            </div>
+
             <div class="or-divider">veya manuel girin</div>
 
             <!-- Manuel Toplu -->
@@ -310,6 +333,13 @@ var excelData = [];
         uz.addEventListener('dragover', function(e){ e.preventDefault(); uz.classList.add('drag'); });
         uz.addEventListener('dragleave', function(){ uz.classList.remove('drag'); });
         uz.addEventListener('drop', function(e){ e.preventDefault(); uz.classList.remove('drag'); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+    }
+
+    var gu = document.getElementById('guZone');
+    if(gu){
+        gu.addEventListener('dragover', function(e){ e.preventDefault(); gu.classList.add('drag'); });
+        gu.addEventListener('dragleave', function(){ gu.classList.remove('drag'); });
+        gu.addEventListener('drop', function(e){ e.preventDefault(); gu.classList.remove('drag'); if(e.dataTransfer.files.length) handleGuFile(e.dataTransfer.files[0]); });
     }
 })();
 
@@ -783,6 +813,136 @@ function exportHareketExcel(){
     var dosyaAdi = 'Hareketler_' + ('0'+tarih.getDate()).slice(-2) + ('0'+(tarih.getMonth()+1)).slice(-2) + tarih.getFullYear() + '.xlsx';
     XLSX.writeFile(wb, dosyaAdi);
     tw('Hareket Excel indirildi ✓');
+}
+
+// ═══ TOPLU GÜNCELLEME ═══
+var guData = [];
+
+function exportGuncelleme(){
+    if(!D.length){ tw('Stok verisi yok!',1); return; }
+    var flt = (document.getElementById('guFlt').value||'').trim().toUpperCase();
+    var filtered = D;
+    if(flt){
+        filtered = D.filter(function(s){ return s.sku.toUpperCase().indexOf(flt) > -1 || s.ad.toUpperCase().indexOf(flt) > -1; });
+    }
+    if(!filtered.length){ tw('Filtreye uyan kalem yok!',1); return; }
+    var rows = [['SKU Kodu','Kalem Açıklaması','Mevcut Stok','Not']];
+    for(var i=0; i<filtered.length; i++){
+        var s = filtered[i];
+        rows.push([s.sku, s.ad, s.stok, s.agirlik === '-' ? '' : s.agirlik]);
+    }
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:20},{wch:45},{wch:14},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Guncelleme');
+    var fn = 'Guncelleme_' + (flt || 'Tumu') + '.xlsx';
+    XLSX.writeFile(wb, fn);
+    tw(filtered.length + ' kalem Excel indirildi ✓');
+}
+
+function handleGuFile(file){
+    if(!file) return;
+    var ext = file.name.split('.').pop().toLowerCase();
+    if(ext==='csv'){
+        var reader = new FileReader();
+        reader.onload = function(e){ parseGuCSV(e.target.result); };
+        reader.readAsText(file, 'UTF-8');
+    } else {
+        var reader = new FileReader();
+        reader.onload = function(e){ parseGuXLSX(e.target.result); };
+        reader.readAsArrayBuffer(file);
+    }
+}
+
+function parseGuCSV(text){
+    var lines = text.split('\n').filter(function(l){ return l.trim(); });
+    guData = [];
+    for(var i=1; i<lines.length; i++){
+        var cols = lines[i].split(/[;\t]/);
+        if(cols.length < 3) cols = lines[i].split(',');
+        var sku = (cols[0]||'').trim();
+        var stok = parseFloat((cols[2]||'0').replace(',','.')) || 0;
+        var not_val = (cols[3]||'').trim();
+        if(sku) guData.push({sku:sku, ad:(cols[1]||'').trim(), stok:stok, not:not_val});
+    }
+    showGuPreview();
+}
+
+function parseGuXLSX(data){
+    var wb = XLSX.read(data, {type:'array'});
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var json = XLSX.utils.sheet_to_json(ws, {header:1});
+    guData = [];
+    for(var i=1; i<json.length; i++){
+        var row = json[i];
+        if(!row || !row[0]) continue;
+        var sku = String(row[0]).trim();
+        var stok = parseFloat(row[2]) || 0;
+        var not_val = String(row[3]||'').trim();
+        if(sku) guData.push({sku:sku, ad:String(row[1]||'').trim(), stok:stok, not:not_val});
+    }
+    showGuPreview();
+}
+
+function showGuPreview(){
+    if(!guData.length){ tw('Dosyada geçerli veri bulunamadı!',1); return; }
+    var changed = 0;
+    var html = '';
+    for(var i=0; i<guData.length; i++){
+        var g = guData[i];
+        var cur = D.find(function(s){ return s.sku === g.sku; });
+        var diff = '';
+        if(cur){
+            var diffs = [];
+            if(cur.stok !== g.stok) diffs.push('Stok: ' + cur.stok + ' → ' + g.stok);
+            var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
+            if(curNot !== g.not) diffs.push('Not değişti');
+            diff = diffs.length ? diffs.join(', ') : 'Değişiklik yok';
+            if(diffs.length) changed++;
+        } else {
+            diff = '⚠️ SKU bulunamadı';
+        }
+        html += '<tr><td class="pv-sku">' + g.sku + '</td><td>' + g.stok + '</td><td>' + (g.not||'-') + '</td><td style="font-size:11px;color:' + (diff.indexOf('→')>-1||diff.indexOf('değişti')>-1?'var(--org)':'var(--txt2)') + '">' + diff + '</td></tr>';
+    }
+    document.getElementById('guCount').textContent = guData.length + ' kalem, ' + changed + ' değişiklik';
+    document.getElementById('guBody').innerHTML = html;
+    document.getElementById('guPreview').style.display = 'block';
+    tw('Dosya okundu ✓');
+}
+
+async function submitGuncelleme(){
+    if(!guData.length){ tw('Önce dosya yükleyin!',1); return; }
+    sl(1);
+    var done=0, fail=0, skip=0;
+
+    for(var i=0; i<guData.length; i++){
+        var g = guData[i];
+        var cur = D.find(function(s){ return s.sku === g.sku; });
+        if(!cur){ skip++; continue; }
+
+        var updates = {};
+        if(cur.stok !== g.stok) updates.mevcut_stok = g.stok;
+        var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
+        if(curNot !== g.not) updates.not_alani = g.not || '-';
+
+        if(Object.keys(updates).length === 0){ skip++; continue; }
+
+        var res = await sb.from('stok').update(updates).eq('sku', g.sku);
+        if(res.error){ fail++; } else { done++; }
+
+        if((i+1) % 10 === 0 || i === guData.length-1){
+            tw('Güncelleniyor: '+(i+1)+'/'+guData.length);
+        }
+    }
+
+    sl(0);
+    tw(done + ' güncellendi, ' + skip + ' atlandı' + (fail ? ', ' + fail + ' hata' : '') + ' ✓');
+    guData = [];
+    document.getElementById('guPreview').style.display = 'none';
+    document.getElementById('guBody').innerHTML = '';
+    var inp = document.querySelector('#guZone input[type=file]');
+    if(inp) inp.value = '';
+    ld();
 }
 
 // ═══ HELPERS ═══
