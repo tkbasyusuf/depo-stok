@@ -797,9 +797,12 @@ function qPick(sku){
         ['Depo Kodu 1',item.depo1||'-'],['Depo Kodu 2',item.depo2||'-'],
         ['Mevcut Stok',item.stok+' '+item.birim],['Minimum Stok',item.minStok+' '+item.birim]
     ];
+    var delBtn = '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--brd);text-align:center">'
+        + '<button onclick="deleteUrun(\''+item.sku.replace(/'/g,"\\'")+'\')" style="padding:10px 24px;border-radius:10px;border:1px solid var(--red);background:#fff5f5;font-family:DM Sans,sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--red)">🗑️ Ürünü Sil</button></div>';
+
     document.getElementById('qDetail').innerHTML=rows.map(function(r){
         return '<div class="qrow"><span class="ql">'+r[0]+'</span><span class="qv">'+r[1]+'</span></div>';
-    }).join('');
+    }).join('') + delBtn;
 }
 
 // Google Drive linkini gösterilebilir URL'ye çevir
@@ -1154,6 +1157,29 @@ async function toggleDurum(sku){
     tw(sku + ' → ' + (yeniDurum === 'aktif' ? '🟢 Aktif' : '🔴 Pasif'));
     await ld();
     qPick(sku);
+}
+
+// ═══ ÜRÜN SİLME ═══
+async function deleteUrun(sku){
+    var item = D.find(function(s){ return s.sku === sku; });
+    if(!item){ tw('Ürün bulunamadı!',1); return; }
+    var onay = confirm('Bu ürünü kalıcı olarak silmek istediğinize emin misiniz?\n\nSKU: ' + sku + '\n' + item.ad + '\n\n⚠️ Bu işlem geri alınamaz!');
+    if(!onay) return;
+    sl(1);
+    // Önce hareket kayıtlarını sil
+    var rh = await sb.from('hareketler').delete().eq('sku', sku);
+    if(rh.error) console.warn('Hareket silme uyarı:', rh.error);
+    // Ürünü sil
+    var res = await sb.from('stok').delete().eq('sku', sku);
+    sl(0);
+    if(res.error){
+        tw('Silinemedi: ' + res.error.message, 1);
+        return;
+    }
+    tw(sku + ' silindi ✓');
+    document.getElementById('qResult').style.display = 'none';
+    document.getElementById('qSrch').value = '';
+    await ld();
 }
 
 // ═══ HELPERS ═══
