@@ -231,6 +231,28 @@
                 </div>
             </div>
 
+            <!-- Toplu Ürün Ekleme -->
+            <div class="card" style="margin-top:12px">
+                <div class="cl">📦 Toplu Ürün Ekleme</div>
+                <p style="font-size:12px;color:var(--txt2);margin-bottom:12px">Yeni ürünleri Excel ile toplu ekleyin. Mevcut SKU'lar güncellenir, yeni SKU'lar eklenir.</p>
+                <button class="btn btn-o" style="margin-bottom:10px" onclick="exportUrunSablon()">📥 Ürün Şablonu İndir</button>
+                <div class="upload-zone" id="urZone" style="margin-bottom:10px">
+                    <div class="uz-icon">📦</div>
+                    <div class="uz-text">Ürün listesi Excel'ini sürükleyin<br>veya tıklayarak seçin</div>
+                    <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUrunFile(this.files[0])">
+                </div>
+                <div id="urPreview" style="display:none">
+                    <div class="preview-count" id="urCount"></div>
+                    <div style="overflow-x:auto">
+                        <table class="preview-table">
+                            <thead><tr><th>SKU</th><th>Açıklama</th><th>Birim</th><th>Stok</th><th>Min</th><th>Durum</th></tr></thead>
+                            <tbody id="urBody"></tbody>
+                        </table>
+                    </div>
+                    <button class="btn btn-d" onclick="submitYeniUrunler()">📦 Toplu Ürün Ekle</button>
+                </div>
+            </div>
+
             <div class="or-divider">veya manuel girin</div>
 
             <!-- Manuel Toplu -->
@@ -340,6 +362,13 @@ var excelData = [];
         gu.addEventListener('dragover', function(e){ e.preventDefault(); gu.classList.add('drag'); });
         gu.addEventListener('dragleave', function(){ gu.classList.remove('drag'); });
         gu.addEventListener('drop', function(e){ e.preventDefault(); gu.classList.remove('drag'); if(e.dataTransfer.files.length) handleGuFile(e.dataTransfer.files[0]); });
+    }
+
+    var ur = document.getElementById('urZone');
+    if(ur){
+        ur.addEventListener('dragover', function(e){ e.preventDefault(); ur.classList.add('drag'); });
+        ur.addEventListener('dragleave', function(){ ur.classList.remove('drag'); });
+        ur.addEventListener('drop', function(e){ e.preventDefault(); ur.classList.remove('drag'); if(e.dataTransfer.files.length) handleUrunFile(e.dataTransfer.files[0]); });
     }
 })();
 
@@ -951,6 +980,129 @@ async function submitGuncelleme(){
     document.getElementById('guPreview').style.display = 'none';
     document.getElementById('guBody').innerHTML = '';
     var inp = document.querySelector('#guZone input[type=file]');
+    if(inp) inp.value = '';
+    ld();
+}
+
+// ═══ TOPLU ÜRÜN EKLEME ═══
+var urunData = [];
+
+function exportUrunSablon(){
+    var rows = [['SKU Kodu','Kalem Açıklaması','Tedarikçi-1','Tedarikçi-2','Depo Kodu-1','Depo Kodu-2','Malzeme Tipi','Ölçü Birimi','Not','Raf/Lokasyon','Mevcut Stok','Minimum Stok','Durum','Foto URL']];
+    rows.push(['T5-ORNEK-001','Örnek Hammadde','Tedarikçi A','-','D01','-','Kauçuk','KG','Açıklama','R01-A',100,50,'aktif','']);
+    rows.push(['T5-ORNEK-002','Örnek Hammadde 2','-','-','-','-','-','AD','-','-',0,0,'aktif','']);
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:20},{wch:35},{wch:14},{wch:14},{wch:12},{wch:12},{wch:14},{wch:10},{wch:20},{wch:14},{wch:12},{wch:12},{wch:10},{wch:40}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Urunler');
+    XLSX.writeFile(wb, 'Urun_Sablon.xlsx');
+    tw('Şablon indirildi ✓');
+}
+
+function handleUrunFile(file){
+    if(!file) return;
+    var ext = file.name.split('.').pop().toLowerCase();
+    if(ext==='csv'){
+        var reader = new FileReader();
+        reader.onload = function(e){ parseUrunCSV(e.target.result); };
+        reader.readAsText(file, 'UTF-8');
+    } else {
+        var reader = new FileReader();
+        reader.onload = function(e){ parseUrunXLSX(e.target.result); };
+        reader.readAsArrayBuffer(file);
+    }
+}
+
+function parseUrunCSV(text){
+    var lines = text.split('\n').filter(function(l){ return l.trim(); });
+    urunData = [];
+    for(var i=1; i<lines.length; i++){
+        var c = lines[i].split(/[;\t]/);
+        if(c.length < 3) c = lines[i].split(',');
+        var sku = (c[0]||'').trim();
+        if(!sku) continue;
+        urunData.push({
+            sku: sku, aciklama: (c[1]||'').trim(),
+            tedarikci_1: (c[2]||'-').trim(), tedarikci_2: (c[3]||'-').trim(),
+            depo_kodu_1: (c[4]||'-').trim(), depo_kodu_2: (c[5]||'-').trim(),
+            malzeme_tipi: (c[6]||'-').trim(), olcu_birimi: (c[7]||'AD').trim(),
+            not_alani: (c[8]||'-').trim(), raf_lokasyon: (c[9]||'-').trim(),
+            mevcut_stok: parseFloat((c[10]||'0').replace(',','.')) || 0,
+            minimum_stok: parseFloat((c[11]||'0').replace(',','.')) || 0,
+            durum: (c[12]||'aktif').trim().toLowerCase() || 'aktif',
+            foto_url: (c[13]||'').trim()
+        });
+    }
+    showUrunPreview();
+}
+
+function parseUrunXLSX(data){
+    var wb = XLSX.read(data, {type:'array'});
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var json = XLSX.utils.sheet_to_json(ws, {header:1});
+    urunData = [];
+    for(var i=1; i<json.length; i++){
+        var r = json[i];
+        if(!r || !r[0]) continue;
+        var sku = String(r[0]).trim();
+        if(!sku) continue;
+        urunData.push({
+            sku: sku, aciklama: String(r[1]||'').trim(),
+            tedarikci_1: String(r[2]||'-').trim(), tedarikci_2: String(r[3]||'-').trim(),
+            depo_kodu_1: String(r[4]||'-').trim(), depo_kodu_2: String(r[5]||'-').trim(),
+            malzeme_tipi: String(r[6]||'-').trim(), olcu_birimi: String(r[7]||'AD').trim(),
+            not_alani: String(r[8]||'-').trim(), raf_lokasyon: String(r[9]||'-').trim(),
+            mevcut_stok: parseFloat(r[10]) || 0,
+            minimum_stok: parseFloat(r[11]) || 0,
+            durum: String(r[12]||'aktif').trim().toLowerCase() || 'aktif',
+            foto_url: String(r[13]||'').trim()
+        });
+    }
+    showUrunPreview();
+}
+
+function showUrunPreview(){
+    if(!urunData.length){ tw('Dosyada geçerli ürün bulunamadı!',1); return; }
+    var yeni = 0, guncelleme = 0;
+    var html = '';
+    for(var i=0; i<urunData.length; i++){
+        var u = urunData[i];
+        var mevcut = D.find(function(s){ return s.sku === u.sku; });
+        if(mevcut) guncelleme++; else yeni++;
+        var badge = mevcut ? '<span style="color:var(--org);font-size:10px"> ● GÜNCELLEME</span>' : '<span style="color:var(--grn);font-size:10px"> ● YENİ</span>';
+        var durumIcon = u.durum === 'pasif' ? '🔴' : '🟢';
+        html += '<tr><td class="pv-sku">' + u.sku + badge + '</td><td>' + u.aciklama + '</td><td>' + u.olcu_birimi + '</td><td>' + u.mevcut_stok + '</td><td>' + u.minimum_stok + '</td><td style="font-size:11px">' + durumIcon + ' ' + u.durum + '</td></tr>';
+    }
+    document.getElementById('urCount').textContent = urunData.length + ' ürün (' + yeni + ' yeni, ' + guncelleme + ' güncelleme)';
+    document.getElementById('urBody').innerHTML = html;
+    document.getElementById('urPreview').style.display = 'block';
+    tw('Dosya okundu ✓');
+}
+
+async function submitYeniUrunler(){
+    if(!urunData.length){ tw('Önce dosya yükleyin!',1); return; }
+    sl(1);
+    var done=0, fail=0;
+    var batchSize = 50;
+
+    for(var i=0; i<urunData.length; i+=batchSize){
+        var batch = urunData.slice(i, i+batchSize);
+        var res = await sb.from('stok').upsert(batch, {onConflict:'sku'});
+        if(res.error){
+            fail += batch.length;
+            console.error('Upsert hatası:', res.error);
+        } else {
+            done += batch.length;
+        }
+        tw('Ekleniyor: ' + Math.min(i+batchSize, urunData.length) + '/' + urunData.length);
+    }
+
+    sl(0);
+    tw(done + ' ürün eklendi/güncellendi' + (fail ? ', ' + fail + ' hata' : '') + ' ✓');
+    urunData = [];
+    document.getElementById('urPreview').style.display = 'none';
+    document.getElementById('urBody').innerHTML = '';
+    var inp = document.querySelector('#urZone input[type=file]');
     if(inp) inp.value = '';
     ld();
 }
