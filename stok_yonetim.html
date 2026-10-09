@@ -815,6 +815,21 @@ function driveToImg(url){
 }
 
 // ═══ EXCEL EXPORT ═══
+// SKU sütununu metin formatına zorla (bilimsel gösterim önleme)
+function fixSkuCol(ws, colIdx){
+    var colLetter = XLSX.utils.encode_col(colIdx);
+    var range = XLSX.utils.decode_range(ws['!ref']);
+    for(var r=range.s.r+1; r<=range.e.r; r++){
+        var addr = colLetter + (r+1);
+        var cell = ws[addr];
+        if(cell && cell.v != null){
+            cell.t = 's';
+            cell.v = String(cell.v);
+            cell.z = '@';
+        }
+    }
+}
+
 function exportExcel(){
     if(!D.length){ tw('Stok verisi yok!',1); return; }
     var rows = [['SKU Kodu','Kalem Açıklaması','Tedarikçi-1','Tedarikçi-2','Depo Kodu-1','Depo Kodu-2','Malzeme Tipi','Ölçü Birimi','Not','Raf/Lokasyon','Mevcut Stok','Minimum Stok','Durum','Foto URL']];
@@ -824,6 +839,7 @@ function exportExcel(){
     }
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(rows);
+    fixSkuCol(ws, 0);
     ws['!cols'] = [{wch:18},{wch:45},{wch:14},{wch:14},{wch:14},{wch:14},{wch:16},{wch:10},{wch:10},{wch:14},{wch:12},{wch:12},{wch:10},{wch:40}];
     XLSX.utils.book_append_sheet(wb, ws, 'Stok');
     var tarih = new Date();
@@ -842,6 +858,7 @@ function exportHareketExcel(){
     }
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(rows);
+    fixSkuCol(ws, 1);
     ws['!cols'] = [{wch:18},{wch:18},{wch:40},{wch:10},{wch:10},{wch:12},{wch:12},{wch:14},{wch:30}];
     XLSX.utils.book_append_sheet(wb, ws, 'Hareketler');
     var tarih = new Date();
@@ -868,6 +885,7 @@ function exportGuncelleme(){
     }
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(rows);
+    fixSkuCol(ws, 0);
     ws['!cols'] = [{wch:20},{wch:45},{wch:14},{wch:30},{wch:10}];
     XLSX.utils.book_append_sheet(wb, ws, 'Guncelleme');
     var fn = 'Guncelleme_' + (flt || 'Tumu') + '.xlsx';
