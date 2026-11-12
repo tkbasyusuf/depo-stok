@@ -946,6 +946,7 @@ function showGuPreview(){
         if(cur){
             var diffs = [];
             if(cur.stok !== g.stok) diffs.push('Stok: ' + cur.stok + ' → ' + g.stok);
+            if(g.ad && cur.ad !== g.ad) diffs.push('Açıklama değişti');
             var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
             if(curNot !== g.not) diffs.push('Not değişti');
             if(g.durum && cur.durum !== g.durum) diffs.push('Durum: ' + cur.durum + ' → ' + g.durum);
@@ -986,6 +987,7 @@ async function submitGuncelleme(){
 
         var updates = {};
         if(cur.stok !== g.stok) updates.mevcut_stok = g.stok;
+        if(g.ad && cur.ad !== g.ad) updates.aciklama = g.ad;
         var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
         if(curNot !== g.not) updates.not_alani = g.not || '-';
         if(g.durum && cur.durum !== g.durum) updates.durum = g.durum;
@@ -1009,9 +1011,12 @@ async function submitGuncelleme(){
         var res = await sb.from('stok').update(updates).eq('sku', g.sku);
         if(res.error){ fail++; continue; } else { done++; }
 
-        // SKU değiştiyse hareketler tablosunu da güncelle
-        if(skuChanged){
-            await sb.from('hareketler').update({sku: g.yeniSku}).eq('sku', g.sku);
+        // SKU veya açıklama değiştiyse hareketler tablosunu da güncelle
+        var hUpd = {};
+        if(skuChanged) hUpd.sku = g.yeniSku;
+        if(g.ad && cur.ad !== g.ad) hUpd.aciklama = g.ad;
+        if(Object.keys(hUpd).length){
+            await sb.from('hareketler').update(hUpd).eq('sku', g.sku);
         }
 
         if((i+1) % 10 === 0 || i === guData.length-1){
