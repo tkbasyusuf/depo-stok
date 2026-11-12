@@ -861,14 +861,14 @@ function exportGuncelleme(){
         filtered = D.filter(function(s){ return s.sku.toUpperCase().indexOf(flt) > -1 || s.ad.toUpperCase().indexOf(flt) > -1; });
     }
     if(!filtered.length){ tw('Filtreye uyan kalem yok!',1); return; }
-    var rows = [['SKU Kodu','Kalem Açıklaması','Mevcut Stok','Not','Durum','Raf/Lokasyon','Tedarikçi 1','Tedarikçi 2','Depo Kodu 1','Depo Kodu 2']];
+    var rows = [['SKU Kodu','Kalem Açıklaması','Mevcut Stok','Not','Durum','Raf/Lokasyon','Tedarikçi 1','Tedarikçi 2','Depo Kodu 1','Depo Kodu 2','Yeni SKU (opsiyonel)']];
     for(var i=0; i<filtered.length; i++){
         var s = filtered[i];
-        rows.push([{t:'s',v:String(s.sku),z:'@'}, s.ad, s.stok, s.agirlik === '-' ? '' : s.agirlik, s.durum || 'aktif', s.raf === '-' ? '' : s.raf, s.ted1 === '-' ? '' : s.ted1, s.ted2 === '-' ? '' : s.ted2, s.depo1 === '-' ? '' : s.depo1, s.depo2 === '-' ? '' : s.depo2]);
+        rows.push([{t:'s',v:String(s.sku),z:'@'}, s.ad, s.stok, s.agirlik === '-' ? '' : s.agirlik, s.durum || 'aktif', s.raf === '-' ? '' : s.raf, s.ted1 === '-' ? '' : s.ted1, s.ted2 === '-' ? '' : s.ted2, s.depo1 === '-' ? '' : s.depo1, s.depo2 === '-' ? '' : s.depo2, '']);
     }
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:20},{wch:45},{wch:14},{wch:30},{wch:10},{wch:16},{wch:16},{wch:16},{wch:16},{wch:16}];
+    ws['!cols'] = [{wch:20},{wch:45},{wch:14},{wch:30},{wch:10},{wch:16},{wch:16},{wch:16},{wch:16},{wch:16},{wch:22}];
     XLSX.utils.book_append_sheet(wb, ws, 'Guncelleme');
     var fn = 'Guncelleme_' + (flt || 'Tumu') + '.xlsx';
     XLSX.writeFile(wb, fn);
@@ -905,7 +905,8 @@ function parseGuCSV(text){
         var ted2 = (cols[7]||'').trim();
         var depo1 = (cols[8]||'').trim();
         var depo2 = (cols[9]||'').trim();
-        if(sku) guData.push({sku:sku, ad:(cols[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || '', raf:raf, ted1:ted1, ted2:ted2, depo1:depo1, depo2:depo2});
+        var yeniSku = (cols[10]||'').trim();
+        if(sku) guData.push({sku:sku, ad:(cols[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || '', raf:raf, ted1:ted1, ted2:ted2, depo1:depo1, depo2:depo2, yeniSku:yeniSku});
     }
     showGuPreview();
 }
@@ -928,7 +929,8 @@ function parseGuXLSX(data){
         var ted2 = String(row[7]||'').trim();
         var depo1 = String(row[8]||'').trim();
         var depo2 = String(row[9]||'').trim();
-        if(sku) guData.push({sku:sku, ad:String(row[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || '', raf:raf, ted1:ted1, ted2:ted2, depo1:depo1, depo2:depo2});
+        var yeniSku = String(row[10]||'').trim();
+        if(sku) guData.push({sku:sku, ad:String(row[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || '', raf:raf, ted1:ted1, ted2:ted2, depo1:depo1, depo2:depo2, yeniSku:yeniSku});
     }
     showGuPreview();
 }
@@ -947,6 +949,7 @@ function showGuPreview(){
             var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
             if(curNot !== g.not) diffs.push('Not değişti');
             if(g.durum && cur.durum !== g.durum) diffs.push('Durum: ' + cur.durum + ' → ' + g.durum);
+            if(g.yeniSku && g.yeniSku !== g.sku) diffs.push('SKU: ' + g.sku + ' → ' + g.yeniSku);
             var curRaf = (cur.raf === '-' ? '' : cur.raf);
             if(g.raf && curRaf !== g.raf) diffs.push('Raf değişti');
             var curTed1 = (cur.ted1 === '-' ? '' : cur.ted1);
@@ -997,10 +1000,19 @@ async function submitGuncelleme(){
         var curDepo2 = (cur.depo2 === '-' ? '' : cur.depo2);
         if(g.depo2 && curDepo2 !== g.depo2) updates.depo_kodu_2 = g.depo2 || '-';
 
+        // SKU değişikliği
+        var skuChanged = g.yeniSku && g.yeniSku !== g.sku;
+        if(skuChanged) updates.sku = g.yeniSku;
+
         if(Object.keys(updates).length === 0){ skip++; continue; }
 
         var res = await sb.from('stok').update(updates).eq('sku', g.sku);
-        if(res.error){ fail++; } else { done++; }
+        if(res.error){ fail++; continue; } else { done++; }
+
+        // SKU değiştiyse hareketler tablosunu da güncelle
+        if(skuChanged){
+            await sb.from('hareketler').update({sku: g.yeniSku}).eq('sku', g.sku);
+        }
 
         if((i+1) % 10 === 0 || i === guData.length-1){
             tw('Güncelleniyor: '+(i+1)+'/'+guData.length);
