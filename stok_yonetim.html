@@ -211,7 +211,7 @@
             <!-- Toplu Güncelleme -->
             <div class="card" style="margin-top:12px">
                 <div class="cl">✏️ Toplu Güncelleme (Stok + Not + Durum)</div>
-                <p style="font-size:12px;color:var(--txt2);margin-bottom:12px">Stok miktarlarını, notları ve aktif/pasif durumunu Excel ile toplu güncelleyin. Önce indirin, düzenleyin, tekrar yükleyin.</p>
+                <p style="font-size:12px;color:var(--txt2);margin-bottom:12px">Stok, not, durum, raf/lokasyon, tedarikçi ve depo kodlarını Excel ile toplu güncelleyin. Önce indirin, düzenleyin, tekrar yükleyin.</p>
                 <div class="fg"><label>Filtre (opsiyonel)</label><input class="fi" id="guFlt" placeholder="Örn: T5 veya boş bırakın (tümü)"></div>
                 <button class="btn btn-o" style="margin-bottom:10px" onclick="exportGuncelleme()">📥 Güncelleme Excel İndir</button>
                 <div class="upload-zone" id="guZone" style="margin-bottom:10px">
@@ -861,14 +861,14 @@ function exportGuncelleme(){
         filtered = D.filter(function(s){ return s.sku.toUpperCase().indexOf(flt) > -1 || s.ad.toUpperCase().indexOf(flt) > -1; });
     }
     if(!filtered.length){ tw('Filtreye uyan kalem yok!',1); return; }
-    var rows = [['SKU Kodu','Kalem Açıklaması','Mevcut Stok','Not','Durum']];
+    var rows = [['SKU Kodu','Kalem Açıklaması','Mevcut Stok','Not','Durum','Raf/Lokasyon','Tedarikçi 1','Tedarikçi 2','Depo Kodu 1','Depo Kodu 2']];
     for(var i=0; i<filtered.length; i++){
         var s = filtered[i];
-        rows.push([{t:'s',v:String(s.sku),z:'@'}, s.ad, s.stok, s.agirlik === '-' ? '' : s.agirlik, s.durum || 'aktif']);
+        rows.push([{t:'s',v:String(s.sku),z:'@'}, s.ad, s.stok, s.agirlik === '-' ? '' : s.agirlik, s.durum || 'aktif', s.raf === '-' ? '' : s.raf, s.ted1 === '-' ? '' : s.ted1, s.ted2 === '-' ? '' : s.ted2, s.depo1 === '-' ? '' : s.depo1, s.depo2 === '-' ? '' : s.depo2]);
     }
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:20},{wch:45},{wch:14},{wch:30},{wch:10}];
+    ws['!cols'] = [{wch:20},{wch:45},{wch:14},{wch:30},{wch:10},{wch:16},{wch:16},{wch:16},{wch:16},{wch:16}];
     XLSX.utils.book_append_sheet(wb, ws, 'Guncelleme');
     var fn = 'Guncelleme_' + (flt || 'Tumu') + '.xlsx';
     XLSX.writeFile(wb, fn);
@@ -900,7 +900,12 @@ function parseGuCSV(text){
         var not_val = (cols[3]||'').trim();
         var durum_val = (cols[4]||'').trim().toLowerCase();
         if(durum_val && durum_val !== 'aktif' && durum_val !== 'pasif') durum_val = '';
-        if(sku) guData.push({sku:sku, ad:(cols[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || ''});
+        var raf = (cols[5]||'').trim();
+        var ted1 = (cols[6]||'').trim();
+        var ted2 = (cols[7]||'').trim();
+        var depo1 = (cols[8]||'').trim();
+        var depo2 = (cols[9]||'').trim();
+        if(sku) guData.push({sku:sku, ad:(cols[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || '', raf:raf, ted1:ted1, ted2:ted2, depo1:depo1, depo2:depo2});
     }
     showGuPreview();
 }
@@ -918,7 +923,12 @@ function parseGuXLSX(data){
         var not_val = String(row[3]||'').trim();
         var durum_val = String(row[4]||'').trim().toLowerCase();
         if(durum_val && durum_val !== 'aktif' && durum_val !== 'pasif') durum_val = '';
-        if(sku) guData.push({sku:sku, ad:String(row[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || ''});
+        var raf = String(row[5]||'').trim();
+        var ted1 = String(row[6]||'').trim();
+        var ted2 = String(row[7]||'').trim();
+        var depo1 = String(row[8]||'').trim();
+        var depo2 = String(row[9]||'').trim();
+        if(sku) guData.push({sku:sku, ad:String(row[1]||'').trim(), stok:stok, not:not_val, durum:durum_val || '', raf:raf, ted1:ted1, ted2:ted2, depo1:depo1, depo2:depo2});
     }
     showGuPreview();
 }
@@ -937,6 +947,16 @@ function showGuPreview(){
             var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
             if(curNot !== g.not) diffs.push('Not değişti');
             if(g.durum && cur.durum !== g.durum) diffs.push('Durum: ' + cur.durum + ' → ' + g.durum);
+            var curRaf = (cur.raf === '-' ? '' : cur.raf);
+            if(g.raf && curRaf !== g.raf) diffs.push('Raf değişti');
+            var curTed1 = (cur.ted1 === '-' ? '' : cur.ted1);
+            if(g.ted1 && curTed1 !== g.ted1) diffs.push('Ted1 değişti');
+            var curTed2 = (cur.ted2 === '-' ? '' : cur.ted2);
+            if(g.ted2 && curTed2 !== g.ted2) diffs.push('Ted2 değişti');
+            var curDepo1 = (cur.depo1 === '-' ? '' : cur.depo1);
+            if(g.depo1 && curDepo1 !== g.depo1) diffs.push('Depo1 değişti');
+            var curDepo2 = (cur.depo2 === '-' ? '' : cur.depo2);
+            if(g.depo2 && curDepo2 !== g.depo2) diffs.push('Depo2 değişti');
             diff = diffs.length ? diffs.join(', ') : 'Değişiklik yok';
             if(diffs.length) changed++;
         } else {
@@ -966,6 +986,16 @@ async function submitGuncelleme(){
         var curNot = (cur.agirlik === '-' ? '' : cur.agirlik);
         if(curNot !== g.not) updates.not_alani = g.not || '-';
         if(g.durum && cur.durum !== g.durum) updates.durum = g.durum;
+        var curRaf = (cur.raf === '-' ? '' : cur.raf);
+        if(g.raf && curRaf !== g.raf) updates.raf_lokasyon = g.raf || '-';
+        var curTed1 = (cur.ted1 === '-' ? '' : cur.ted1);
+        if(g.ted1 && curTed1 !== g.ted1) updates.tedarikci_1 = g.ted1 || '-';
+        var curTed2 = (cur.ted2 === '-' ? '' : cur.ted2);
+        if(g.ted2 && curTed2 !== g.ted2) updates.tedarikci_2 = g.ted2 || '-';
+        var curDepo1 = (cur.depo1 === '-' ? '' : cur.depo1);
+        if(g.depo1 && curDepo1 !== g.depo1) updates.depo_kodu_1 = g.depo1 || '-';
+        var curDepo2 = (cur.depo2 === '-' ? '' : cur.depo2);
+        if(g.depo2 && curDepo2 !== g.depo2) updates.depo_kodu_2 = g.depo2 || '-';
 
         if(Object.keys(updates).length === 0){ skip++; continue; }
 
