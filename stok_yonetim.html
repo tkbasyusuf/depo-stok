@@ -756,7 +756,7 @@ function uA(){
     var al=cr.map(function(s){return Object.assign({},s,{l:'c'});}).concat(wr.map(function(s){return Object.assign({},s,{l:'w'});}));
     al.sort(function(a,b){return(a.stok/a.minStok)-(b.stok/b.minStok);});
     bx.innerHTML=al.map(function(s){
-        return '<div class="aitem'+(s.l==='w'?' w':'')+'"><div class="aicon">'+(s.l==='c'?'🔴':'🟡')+'</div><div><div class="aname">'+s.ad+'</div><div class="asub">Mevcut: <strong style="color:'+(s.l==='c'?'var(--red)':'var(--org)')+'">'+s.stok+' '+s.birim+'</strong> / Min: '+s.minStok+' '+s.birim+'</div></div></div>';
+        return '<div class="aitem'+(s.l==='w'?' w':'')+'"><div class="aicon">'+(s.l==='c'?'🔴':'🟡')+'</div><div><div class="aname">'+s.ad+'</div><div class="asub" style="margin-bottom:2px;font-size:11px;color:var(--txt2)">SKU: '+s.sku+'</div><div class="asub">Mevcut: <strong style="color:'+(s.l==='c'?'var(--red)':'var(--org)')+'">'+s.stok+' '+s.birim+'</strong> / Min: '+s.minStok+' '+s.birim+'</div></div></div>';
     }).join('');
 }
 
