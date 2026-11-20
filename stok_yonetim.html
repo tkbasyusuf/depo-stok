@@ -129,11 +129,14 @@
 <!-- LOGIN -->
 <div class="screen active" id="S0">
     <div class="login">
-        <h1>Depo Stok</h1>
-        <p class="sub">Hammadde yönetim sistemi</p>
+        <h1>Stok Yönetim Sistemi</h1>
         <div class="lcard">
             <label>Operatör Adı</label>
             <input type="text" id="iN" placeholder="Adınızı girin...">
+            <div class="fg" style="margin-top:12px;margin-bottom:12px">
+                <label>Yönetici Şifresi <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--mute)">(sadece stok giriş/çıkış için)</span></label>
+                <input type="password" id="iP" placeholder="Görüntüleme için boş bırakın...">
+            </div>
             <button class="btn btn-d" onclick="doLogin()">Giriş</button>
         </div>
     </div>
@@ -142,7 +145,7 @@
 <!-- APP -->
 <div class="screen" id="S1">
     <header class="hdr">
-        <div><div class="hdr-t">Depo Stok</div><div class="hdr-s" id="opLbl"></div></div>
+        <div><div class="hdr-t">Depo Stok</div><div class="hdr-s"><span id="opLbl"></span> · <span id="roleBadge" style="font-size:11px"></span></div></div>
         <button class="btn-o" style="width:auto;padding:6px 12px;font-size:11px;border-radius:8px" onclick="doLogout()">Çıkış</button>
     </header>
     <div class="main">
@@ -314,8 +317,8 @@
     </div>
 
     <nav class="bnav">
-        <button class="ni active" onclick="go('t1',this)"><span class="ic">📥</span>Giriş/Çıkış</button>
-        <button class="ni" onclick="go('t2',this)"><span class="ic">📋</span>Toplu</button>
+        <button class="ni ni-admin active" onclick="go('t1',this)"><span class="ic">📥</span>Giriş/Çıkış</button>
+        <button class="ni ni-admin" onclick="go('t2',this)"><span class="ic">📋</span>Toplu</button>
         <button class="ni" onclick="go('t3',this)"><span class="ic">🕐</span>Hareketler</button>
         <button class="ni" onclick="go('t4',this)"><span class="ic">⚠️</span>Uyarılar<span class="nbdg" id="bdg" style="display:none">0</span></button>
         <button class="ni" onclick="go('t5',this)"><span class="ic">🔍</span>Sorgula</button>
@@ -330,7 +333,9 @@ var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ═══ STATE ═══
+var ADMIN_PIN = '240514';
 var O = localStorage.getItem('so') || '';
+var isAdmin = localStorage.getItem('sa') === '1';
 var D = [], M = [], sel = null, mt = 'Giris', bt = 'Giris', hf = 'all';
 var excelData = [];
 
@@ -340,6 +345,7 @@ var excelData = [];
         document.getElementById('S0').classList.remove('active');
         document.getElementById('S1').classList.add('active');
         document.getElementById('opLbl').textContent = O;
+        applyRole();
         ld();
     }
     addR(); addR(); addR();
@@ -376,14 +382,37 @@ var excelData = [];
 function doLogin(){
     var n = document.getElementById('iN').value.trim();
     if(!n){ tw('Adınızı girin!', 1); return; }
+    var p = document.getElementById('iP').value.trim();
     O = n;
+    isAdmin = (p === ADMIN_PIN);
     localStorage.setItem('so', n);
+    localStorage.setItem('sa', isAdmin ? '1' : '0');
     document.getElementById('S0').classList.remove('active');
     document.getElementById('S1').classList.add('active');
     document.getElementById('opLbl').textContent = n;
+    applyRole();
     ld();
 }
-function doLogout(){ localStorage.removeItem('so'); location.reload(); }
+function doLogout(){ localStorage.removeItem('so'); localStorage.removeItem('sa'); location.reload(); }
+
+function applyRole(){
+    var adminTabs = document.querySelectorAll('.ni-admin');
+    var adminPanels = document.querySelectorAll('.admin-only');
+    for(var i=0;i<adminTabs.length;i++) adminTabs[i].style.display = isAdmin ? '' : 'none';
+    for(var i=0;i<adminPanels.length;i++) adminPanels[i].style.display = isAdmin ? '' : 'none';
+    var roleBadge = document.getElementById('roleBadge');
+    if(roleBadge) roleBadge.textContent = isAdmin ? '🔑 Yönetici' : '👁️ Görüntüleme';
+    // Admin değilse varsayılan Uyarılar sekmesine yönlendir
+    if(!isAdmin){
+        var panels = document.querySelectorAll('.tp');
+        var items = document.querySelectorAll('.ni');
+        for(var i=0;i<panels.length;i++) panels[i].classList.remove('active');
+        for(var i=0;i<items.length;i++) items[i].classList.remove('active');
+        document.getElementById('t4').classList.add('active');
+        var visibleTabs = document.querySelectorAll('.ni:not(.ni-admin)');
+        if(visibleTabs.length>0) visibleTabs[0].classList.add('active');
+    }
+}
 
 // ═══ PAGINATED FETCH (Supabase 1000-row limit bypass) ═══
 async function fetchAll(table, orderCol, ascending){
@@ -797,8 +826,8 @@ function qPick(sku){
         ['Depo Kodu 1',item.depo1||'-'],['Depo Kodu 2',item.depo2||'-'],
         ['Mevcut Stok',item.stok+' '+item.birim],['Minimum Stok',item.minStok+' '+item.birim]
     ];
-    var delBtn = '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--brd);text-align:center">'
-        + '<button onclick="deleteUrun(\''+item.sku.replace(/'/g,"\\'")+'\')" style="padding:10px 24px;border-radius:10px;border:1px solid var(--red);background:#fff5f5;font-family:DM Sans,sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--red)">🗑️ Ürünü Sil</button></div>';
+    var delBtn = isAdmin ? '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--brd);text-align:center">'
+        + '<button onclick="deleteUrun(\''+item.sku.replace(/'/g,"\\'")+'\')" style="padding:10px 24px;border-radius:10px;border:1px solid var(--red);background:#fff5f5;font-family:DM Sans,sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--red)">🗑️ Ürünü Sil</button></div>' : '';
 
     document.getElementById('qDetail').innerHTML=rows.map(function(r){
         return '<div class="qrow"><span class="ql">'+r[0]+'</span><span class="qv">'+r[1]+'</span></div>';
